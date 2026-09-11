@@ -1,0 +1,240 @@
+---
+import Layout from "../components/Layout.astro";
+import OrganicAmbient from "../components/OrganicAmbient.astro";
+import { loadSectionConfig, fetchDatabaseRecords } from "../lib/notion";
+import { hasSalento } from "../lib/crm";
+
+const sections = loadSectionConfig();
+const actorsSection = sections.find((s) => s.id === "actors");
+const programsSection = sections.find((s) => s.id === "programs");
+const eventsSection = sections.find((s) => s.id === "events");
+
+let actorCount = 0;
+let programCount = 0;
+let eventCount = 0;
+let error: string | null = null;
+
+async function fetchCount(section: typeof actorsSection) {
+    if (!section?.database_id) return 0;
+    const records = await fetchDatabaseRecords(section.database_id);
+    return records.filter(hasSalento).length;
+}
+
+try {
+    [actorCount, programCount, eventCount] = await Promise.all([
+        fetchCount(actorsSection),
+        fetchCount(programsSection),
+        fetchCount(eventsSection),
+    ]);
+} catch (e: any) {
+    error = e.message ?? "Impossibile recuperare i dati da Notion.";
+}
+
+const totalCount = actorCount + programCount + eventCount;
+
+const rawBase = import.meta.env.BASE_URL;
+const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
+
+const exploreLinks = [
+    {
+        id: "organizations",
+        title: "Organizzazioni",
+        description:
+            "Persone, reti, organizzazioni e progetti che lavorano per la rigenerazione.",
+        href: `${base}organizations/`,
+        count: actorCount,
+    },
+    {
+        id: "programs",
+        title: "Programmi e Iniziative",
+        description:
+            "Programmi collettivi, reti e iniziative che guidano il cambiamento sistemico.",
+        href: `${base}programs/`,
+        count: programCount,
+    },
+    {
+        id: "events",
+        title: "Eventi",
+        description: "Incontri, conferenze, workshop e momenti di comunità.",
+        href: `${base}events/`,
+        count: eventCount,
+    },
+];
+---
+
+<Layout title="Home" current="home">
+    <header class="hero">
+        <OrganicAmbient />
+        <div class="hero__inner section">
+            <p class="eyebrow">Salentu Rigenerativu</p>
+            <h1 class="display">Chi sta rigenerando il Salento?</h1>
+            <p class="lede">
+                Mappe collaborative e processi di mappatura concentrati su
+                organizzazioni e iniziative che lavorano per un Salento
+                rigenerativo. Cerca, filtra e scopri chi fa cosa — e come puoi
+                contribuire a questo movimento!
+            </p>
+
+            <p class="stats">
+                <strong>{totalCount}</strong>{" "}
+                <span>
+                    organizzazioni, programmi ed eventi attualmente mappati
+                </span>
+            </p>
+
+            {error && (
+                <div class="error-banner">
+                    <p>
+                        <strong>Errore dati:</strong> {error}
+                    </p>
+                </div>
+            )}
+        </div>
+    </header>
+
+    <section class="section section--wide">
+        <p class="section-prompt">Inizia a esplorare la mappa:</p>
+        <div class="link-grid">
+            {exploreLinks.map((link) => (
+                <a href={link.href} class="explore-card">
+                    <span class="explore-count">{link.count}</span>
+                    <h2 class="explore-title">{link.title}</h2>
+                    <p class="explore-description">{link.description}</p>
+                    <span class="explore-action">Esplora →</span>
+                </a>
+            ))}
+        </div>
+    </section>
+</Layout>
+
+<style>
+    .hero {
+        position: relative;
+        padding: var(--space-16) var(--gutter) var(--space-6);
+        border-bottom: 1px solid var(--ink);
+        background: var(--paper);
+        text-align: center;
+        overflow: hidden;
+    }
+    .hero__inner {
+        position: relative;
+        z-index: 1;
+        max-width: var(--container-default);
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .hero .eyebrow {
+        margin-bottom: var(--space-3);
+    }
+    .hero h1 {
+        margin-bottom: var(--space-5);
+    }
+    .hero .lede {
+        max-width: 66ch;
+        margin: 0 auto var(--space-8);
+    }
+
+    .stats {
+        font-family: var(--serif);
+        font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+        font-style: italic;
+        line-height: 1.5;
+        color: var(--text-muted);
+        margin: 0 0 var(--space-4);
+        max-width: 60ch;
+    }
+    .stats strong {
+        font-family: var(--serif);
+        font-style: normal;
+        font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+        font-weight: 500;
+        color: var(--regen);
+    }
+
+    .section-prompt {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin: 0 0 var(--space-4);
+    }
+
+    .link-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+        gap: var(--space-4);
+    }
+
+    .explore-card {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        padding: var(--space-6);
+        background: var(--surface-1);
+        border: 1px solid var(--border-subtle);
+        text-decoration: none;
+        color: inherit;
+        transition:
+            border-color var(--t-fast),
+            background-color var(--t-fast),
+            transform var(--t-fast);
+    }
+    .explore-card:hover {
+        border-color: var(--regen);
+        background: var(--paper);
+        transform: translateY(-3px);
+    }
+
+    .explore-count {
+        font-family: var(--mono);
+        font-size: 2.5rem;
+        font-weight: 500;
+        line-height: 1;
+        color: var(--regen);
+    }
+    .explore-title {
+        font-family: var(--serif);
+        font-size: 1.3rem;
+        font-weight: 500;
+        margin: 0;
+        color: var(--ink);
+    }
+    .explore-description {
+        font-size: 0.92rem;
+        line-height: 1.55;
+        color: var(--text-muted);
+        margin: 0;
+        flex: 1 1 auto;
+    }
+    .explore-action {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--primary);
+        align-self: flex-start;
+    }
+
+    .error-banner {
+        background: var(--surface-2);
+        border: 1px solid var(--primary);
+        padding: var(--space-4);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        margin-top: var(--space-6);
+        max-width: 60ch;
+    }
+
+    @media (max-width: 720px) {
+        .hero {
+            padding: var(--space-10) var(--gutter) var(--space-8);
+        }
+        .link-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

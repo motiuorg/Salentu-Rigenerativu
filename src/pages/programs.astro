@@ -1,0 +1,545 @@
+---
+import Layout from "../components/Layout.astro";
+import OrganicAmbient from "../components/OrganicAmbient.astro";
+import { loadSectionConfig, fetchDatabaseRecords } from "../lib/notion";
+import { normalizeProgram, hasSalento, uniqueValues } from "../lib/crm";
+import type { CrmProgram } from "../lib/crm";
+
+const sections = loadSectionConfig();
+const programsSection = sections.find((s) => s.id === "programs");
+
+let records: any[] = [];
+let error: string | null = null;
+if (programsSection?.database_id) {
+    try {
+        records = await fetchDatabaseRecords(programsSection.database_id);
+    } catch (e: any) {
+        error = e.message ?? "Failed to fetch programs from Notion.";
+    }
+} else {
+    error = "No database_id configured for programs section.";
+}
+
+const programs: CrmProgram[] = records.filter(hasSalento).map(normalizeProgram);
+
+// I territori vengono ricavati dinamicamente dai dati presenti in Notion.
+const activeTerritories = uniqueValues(programs, "area2").filter(Boolean);
+
+const safeJson = (obj: any) =>
+    JSON.stringify(obj)
+        .replace(/</g, "\\u003c")
+        .replace(/>/g, "\\u003e")
+        .replace(/&/g, "\\u0026");
+---
+
+<Layout title="Programmi e Iniziative" current="programs">
+    <header class="hero hero--compact">
+        <OrganicAmbient />
+        <div class="hero__inner section">
+            <p class="eyebrow">Salentu Rigenerativu</p>
+            <h1 class="display">Programmi e Iniziative</h1>
+            <p class="lede">
+                Programmi, reti e iniziative collettive rigenerative attive nel
+                Salento. Cerca per nome o filtra per territorio.
+            </p>
+        </div>
+    </header>
+
+    <section class="section section--wide">
+        {error && (
+            <div class="error-banner">
+                <p>
+                    <strong>Errore dati:</strong> {error}
+                </p>
+            </div>
+        )}
+
+        <div class="filter-panel">
+            <div class="filter-panel__header">
+                <h2 class="filter-panel__title">Filtri</h2>
+                <button type="button" class="filter-clear" id="clear-filters">
+                    Cancella tutto
+                </button>
+            </div>
+
+            <div class="filter-search">
+                <label class="filter-label" for="search-input">
+                    Cerca per nome
+                </label>
+                <input
+                    type="search"
+                    id="search-input"
+                    class="search-input"
+                    placeholder="Digita il nome di un programma…"
+                    autocomplete="off"
+                />
+            </div>
+
+            <div class="filter-grid">
+                <fieldset class="filter-group filter-group--wide">
+                    <legend class="filter-label">Territorio</legend>
+                    <div class="checkbox-list" id="territory-filters">
+                        {activeTerritories.map((tag) => (
+                            <label class="checkbox-item">
+                                <input type="checkbox" value={tag} />
+                                <span>{tag}</span>
+                            </label>
+                        ))}
+                    </div>
+                </fieldset>
+            </div>
+        </div>
+
+        <p class="count" id="gallery-count">
+            Caricamento…
+        </p>
+
+        <div class="item-grid" id="program-gallery">
+            {programs.map((program) => (
+                <article class="item-card" data-program={safeJson(program)}>
+                    <div class="item-card__header">
+                        <h3 class="item-name">{program.name}</h3>
+                        {program.agency && (
+                            <span class="item-type">{program.agency}</span>
+                        )}
+                    </div>
+
+                    <p class="item-description">
+                        {program.description || program.whatItIs || (
+                            <span>Nessuna descrizione disponibile.</span>
+                        )}
+                    </p>
+
+                    <div class="item-badges">
+                        {program.area2.map((area) => (
+                            <span class="territory-badge">{area}</span>
+                        ))}
+                    </div>
+
+                    {program.website && (
+                        <a
+                            href={program.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="item-link"
+                        >
+                            <span>Sito web →</span>
+                        </a>
+                    )}
+                </article>
+            ))}
+        </div>
+    </section>
+
+    <script is:inline>
+        (function () {
+            const cards = Array.from(document.querySelectorAll(".item-card"));
+            const programs = cards.map((el) =>
+                JSON.parse(el.dataset.program || "{}"),
+            );
+            const countLabel = document.getElementById("gallery-count");
+            const searchInput = document.getElementById("search-input");
+            const clearBtn = document.getElementById("clear-filters");
+
+            const filters = {
+                area2: [],
+                search: "",
+            };
+
+            function normalize(str) {
+                return String(str || "")
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/\p{Diacritic}/gu, "");
+            }
+
+            function matches(program, key, values) {
+                if (values.length === 0) return true;
+                const programValues = program[key] || [];
+                return values.some((v) => programValues.includes(v));
+            }
+
+            function matchesSearch(program) {
+                const term = normalize(filters.search).trim();
+                if (!term) return true;
+                const haystack = normalize(
+                    [program.name, program.description, program.whatItIs].join(
+                        " ",
+                    ),
+                );
+                return haystack.includes(term);
+            }
+
+            function isVisible(program) {
+                return (
+                    matchesSearch(program) &&
+                    matches(program, "area2", filters.area2)
+                );
+            }
+
+            function updateGallery() {
+                let visible = 0;
+                for (let i = 0; i < programs.length; i++) {
+                    const show = isVisible(programs[i]);
+                    cards[i].classList.toggle("is-hidden", !show);
+                    if (show) visible++;
+                }
+                if (countLabel) {
+                    const shown = visible;
+                    const total = programs.length;
+                    countLabel.textContent = `Mostrando ${shown} di ${total} programmi`;
+                }
+            }
+
+            function bindButtonGroup(containerId, key) {
+                document
+                    .querySelectorAll(`#${containerId} .filter-btn`)
+                    .forEach((btn) => {
+                        btn.addEventListener("click", () => {
+                            const value = btn.dataset.filterValue;
+                            const active = btn.classList.toggle("active");
+                            btn.setAttribute("aria-pressed", String(active));
+                            if (active) {
+                                filters[key].push(value);
+                            } else {
+                                filters[key] = filters[key].filter(
+                                    (v) => v !== value,
+                                );
+                            }
+                            updateGallery();
+                        });
+                    });
+            }
+
+            function bindCheckboxGroup(containerId, key) {
+                document
+                    .querySelectorAll(`#${containerId} input[type='checkbox']`)
+                    .forEach((input) => {
+                        input.addEventListener("change", () => {
+                            filters[key] = Array.from(
+                                document.querySelectorAll(
+                                    `#${containerId} input[type='checkbox']:checked`,
+                                ),
+                            ).map((el) => el.value);
+                            updateGallery();
+                        });
+                    });
+            }
+
+            bindCheckboxGroup("territory-filters", "area2");
+
+            if (searchInput) {
+                searchInput.addEventListener("input", () => {
+                    filters.search = searchInput.value;
+                    updateGallery();
+                });
+            }
+
+            if (clearBtn) {
+                clearBtn.addEventListener("click", () => {
+                    filters.area2 = [];
+                    filters.search = "";
+                    if (searchInput) searchInput.value = "";
+                    document
+                        .querySelectorAll(".filter-btn.active")
+                        .forEach((btn) => {
+                            btn.classList.remove("active");
+                            btn.setAttribute("aria-pressed", "false");
+                        });
+                    document
+                        .querySelectorAll(
+                            ".checkbox-list input[type='checkbox']",
+                        )
+                        .forEach((input) => {
+                            input.checked = false;
+                        });
+                    updateGallery();
+                });
+            }
+
+            updateGallery();
+        })();
+    </script>
+</Layout>
+
+<style>
+    .hero--compact {
+        position: relative;
+        padding: var(--space-12) var(--gutter) var(--space-8);
+        border-bottom: 1px solid var(--ink);
+        background: var(--paper);
+        overflow: hidden;
+    }
+    .hero__inner {
+        position: relative;
+        z-index: 1;
+        max-width: var(--container-default);
+        margin: 0 auto;
+    }
+    .hero--compact .eyebrow {
+        margin-bottom: var(--space-3);
+    }
+    .hero--compact h1 {
+        margin-bottom: var(--space-4);
+    }
+    .hero--compact .lede {
+        max-width: 70ch;
+    }
+
+    .filter-panel {
+        background: var(--surface-1);
+        border: 1px solid var(--border-subtle);
+        padding: var(--space-6);
+        margin-bottom: var(--space-6);
+    }
+    .filter-panel__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        margin-bottom: var(--space-5);
+        padding-bottom: var(--space-4);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .filter-panel__title {
+        font-family: var(--serif);
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin: 0;
+    }
+    .filter-clear {
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: var(--space-2) var(--space-3);
+        background: transparent;
+        color: var(--primary);
+        border: 1px solid var(--border-subtle);
+        cursor: pointer;
+        transition:
+            background-color var(--t-fast),
+            border-color var(--t-fast);
+    }
+    .filter-clear:hover {
+        background: var(--surface-2);
+        border-color: var(--primary);
+    }
+
+    .filter-search {
+        margin-bottom: var(--space-5);
+    }
+    .filter-search .filter-label {
+        display: block;
+        margin-bottom: var(--space-2);
+    }
+    .search-input {
+        width: 100%;
+        max-width: 40rem;
+        padding: var(--space-3) var(--space-4);
+        font-family: var(--sans);
+        font-size: var(--text-base);
+        color: var(--text-primary);
+        background: var(--paper);
+        border: 1px solid var(--border-subtle);
+        outline: none;
+        transition: border-color var(--t-fast);
+    }
+    .search-input:focus {
+        border-color: var(--primary);
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+        gap: var(--space-6);
+    }
+    .filter-group {
+        margin: 0;
+        padding: 0;
+        border: none;
+        min-width: 0;
+    }
+    .filter-label {
+        display: block;
+        font-family: var(--mono);
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin-bottom: var(--space-2);
+    }
+
+    .filter-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+    }
+    .filter-btn {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: var(--space-2) var(--space-3);
+        background: var(--paper);
+        color: var(--text-primary);
+        border: 1px solid var(--border-subtle);
+        cursor: pointer;
+        transition:
+            background-color var(--t-fast),
+            color var(--t-fast),
+            border-color var(--t-fast);
+    }
+    .filter-btn:hover {
+        border-color: var(--ink);
+    }
+    .filter-btn.active {
+        background: color-mix(
+            in srgb,
+            var(--filter-color, var(--primary)) 14%,
+            var(--surface-1)
+        );
+        color: var(--filter-color, var(--primary));
+        border-color: var(--filter-color, var(--primary));
+    }
+
+    .checkbox-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+        max-height: 12rem;
+        overflow-y: auto;
+        padding: var(--space-2);
+        background: var(--paper);
+        border: 1px solid var(--border-subtle);
+    }
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-family: var(--sans);
+        font-size: 0.85rem;
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+    .checkbox-item input {
+        cursor: pointer;
+    }
+
+    .count {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin: 0 0 var(--space-6);
+    }
+
+    .item-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr));
+        gap: var(--space-4);
+    }
+
+    .item-card {
+        background: var(--surface-1);
+        border: 1px solid var(--border-subtle);
+        padding: var(--space-6);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        transition: border-color var(--t-fast);
+    }
+    .item-card:hover {
+        border-color: var(--ink);
+    }
+    .item-card.is-hidden {
+        display: none;
+    }
+
+    .item-card__header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-3);
+    }
+    .item-name {
+        font-family: var(--serif);
+        font-size: 1.2rem;
+        font-weight: 500;
+        margin: 0;
+        color: var(--ink);
+        letter-spacing: -0.01em;
+    }
+    .item-type {
+        font-family: var(--mono);
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 0.2rem 0.5rem;
+        background: var(--surface-2);
+        color: var(--text-muted);
+        border: 1px solid var(--border-subtle);
+        white-space: nowrap;
+    }
+    .item-description {
+        font-size: 0.92rem;
+        line-height: 1.55;
+        color: var(--text-muted);
+        margin: 0;
+    }
+
+    .item-badges {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+    }
+    .territory-badge {
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 0.15rem 0.4rem;
+        background: var(--surface-2);
+        color: var(--text-muted);
+        border: 1px solid var(--border-subtle);
+    }
+
+    .item-link {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--primary);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        transition: border-color var(--t-fast);
+        align-self: flex-start;
+        margin-top: var(--space-1);
+    }
+    .item-link:hover {
+        border-bottom-color: var(--primary);
+    }
+
+    .error-banner {
+        background: var(--surface-2);
+        border: 1px solid var(--primary);
+        padding: var(--space-4);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        margin-bottom: var(--space-6);
+    }
+
+    @media (max-width: 720px) {
+        .filter-grid {
+            grid-template-columns: 1fr;
+        }
+        .item-grid {
+            grid-template-columns: 1fr;
+        }
+        .item-card__header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>

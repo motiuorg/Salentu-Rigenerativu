@@ -1,0 +1,14 @@
+dist/
+node_modules/
+.astro/
+.cache/
+.env
+.env.*
+*.log
+.DS_Store
+
+# Reference docs / CRM exports (may contain personal data)
+ReFi BCN CRM *.csv
+Calendar Events *.csv
+Programs & Initiatives *.csv
+CRM restructuring *.md

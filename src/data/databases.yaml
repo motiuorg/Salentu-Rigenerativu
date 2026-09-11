@@ -1,0 +1,26 @@
+# Mapping dei database Notion per Salentu Rigenerativu
+# Gli ID dei database non sono sensibili — solo NOTION_API_KEY è segreta.
+# Le voci mostrate sul sito sono quelle taggate con "salento" (2NDTAG / Select).
+
+sections:
+  - id: actors
+    name: Attori Rigenerativi
+    description: Attori e iniziative rigenerative nel Salento
+    database_id: ebc1441510e182638180014a4851dbb0
+    route: /organizations
+    icon: map-pin
+    # Proprietà attese dalla UI: Name, Lat, Lng, Type/Tags, Description, URL
+  - id: programs
+    name: Programmi e Iniziative
+    description: Programmi e iniziative legati alla rigenerazione nel Salento
+    database_id: 4da8003266a34efd96321ac616d6c5a4
+    route: /programs
+    icon: layers
+    # Proprietà attese dalla UI: Name, 2NDTAG, Description, Website, Area2
+  - id: events
+    name: Eventi
+    description: Eventi legati alla rigenerazione nel Salento
+    database_id: 753f19a5ba9d4da69e7d0b1813106fd3
+    route: /events
+    icon: calendar
+    # Proprietà attese dalla UI: Event, About, Date, Location, Link, Type, Select/2NDTAG
