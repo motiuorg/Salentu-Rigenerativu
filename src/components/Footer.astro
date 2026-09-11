@@ -6,7 +6,6 @@ const site = yaml.load(
     fs.readFileSync(path.join(process.cwd(), "src/data/site.yaml"), "utf8"),
 ) as {
     name: string;
-    legalNote: string;
     url: string;
 };
 const siteHost = new URL(site.url).host;
@@ -19,7 +18,12 @@ const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
     <div class="cols">
         <div class="col">
             <span class="lockup">{site.name}</span>
-            <p>{site.legalNote}</p>
+            <p class="managed-by">
+                <span>Pagina web gestita da </span>
+                <a href="https://motiu.org" target="_blank" rel="noopener">
+                    Motiu
+                </a>
+            </p>
         </div>
         <div class="col">
             <span class="eyebrow">Esplora</span>
@@ -35,29 +39,6 @@ const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
                 </li>
                 <li>
                     <a href={`${base}events/`}>Eventi</a>
-                </li>
-            </ul>
-        </div>
-        <div class="col">
-            <span class="eyebrow">Partner</span>
-            <ul>
-                <li>
-                    <a
-                        href="https://miceli.social"
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        Miceli Social
-                    </a>
-                </li>
-                <li>
-                    <a
-                        href="https://refibcn.cat"
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        ReFi BCN
-                    </a>
                 </li>
             </ul>
         </div>
@@ -89,7 +70,7 @@ const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
     }
     .cols {
         display: grid;
-        grid-template-columns: 1.4fr repeat(3, 1fr);
+        grid-template-columns: 1.4fr 1fr;
         gap: var(--space-8);
         max-width: var(--container-default);
         margin: 0 auto;
@@ -102,6 +83,13 @@ const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
     }
     .col p {
         margin: var(--space-2) 0 0;
+    }
+    .managed-by a {
+        color: var(--primary);
+        text-decoration: none;
+    }
+    .managed-by a:hover {
+        text-decoration: underline;
     }
     .col ul {
         list-style: none;
@@ -129,7 +117,7 @@ const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
     }
     @media (max-width: 720px) {
         .cols {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
         }
     }
 </style>
